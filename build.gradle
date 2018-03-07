@@ -1,0 +1,53 @@
+apply plugin: 'java'
+
+repositories {
+  mavenCentral()
+}
+
+def userPrefix = System.getenv("TF_VAR_prefix")?.trim() ? System.getenv("TF_VAR_prefix") : System.getProperty("TF_VAR_prefix")
+
+if (!userPrefix?.trim()) {
+  throw new GradleException("Environment variable TF_VAR_prefix has to be set, e.g. export TF_VAR_prefix=<your-user-name>-")
+}
+
+ext.userPrefix = userPrefix
+
+allprojects {
+  task deploy {
+    def terraformDir = project.projectDir.path + '/terraform'
+
+    doLast {
+      exec {
+        workingDir terraformDir
+        commandLine 'terraform', 'init'
+      }
+
+      exec {
+        workingDir terraformDir
+        ignoreExitValue true // ignore if the workspace already exists
+        commandLine 'terraform', 'workspace', 'new', userPrefix
+      }
+
+      exec {
+        workingDir terraformDir
+        commandLine 'terraform', 'workspace', 'select', userPrefix
+      }
+
+      exec {
+        workingDir terraformDir
+        commandLine 'terraform', 'apply', '-auto-approve'
+      }
+    }
+  }
+
+  task destroy {
+    def terraformDir = project.projectDir.path + '/terraform'
+
+    doLast {
+      exec {
+        workingDir terraformDir
+        commandLine 'terraform', 'destroy', '-force'
+      }
+    }
+  }
+}
