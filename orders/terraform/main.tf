@@ -19,7 +19,7 @@ provider "template" {
 }
 
 resource "aws_key_pair" "ssh" {
-  key_name   = "javaland-orders"
+  key_name   = "${var.prefix}-javaland-orders"
   public_key = "${file("ssh/javaland.pub")}"
 }
 
