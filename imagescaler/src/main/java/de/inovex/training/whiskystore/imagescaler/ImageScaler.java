@@ -44,6 +44,7 @@ public class ImageScaler implements RequestHandler<S3Event, Void> {
 
                 Thumbnails.of(s3Object.getObjectContent())
                         .size(120, 120)
+                        .outputFormat("JPEG")
                         .toOutputStream(outputStream);
 
                 storeThumbnail(record, outputStream.toByteArray());
@@ -72,6 +73,7 @@ public class ImageScaler implements RequestHandler<S3Event, Void> {
     private void storeThumbnail(S3EventNotification.S3EventNotificationRecord record, byte[] imageBytes) {
         ObjectMetadata metadata = new ObjectMetadata();
         metadata.setContentLength(imageBytes.length);
+        metadata.setContentType("image/jpeg");
 
         String key = getKey(record);
         int lastIndex = key.lastIndexOf(".");
