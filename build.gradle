@@ -12,7 +12,7 @@ if (!userPrefix?.trim()) {
 
 ext.userPrefix = userPrefix
 
-allprojects {
+subprojects {
   task deploy {
     def terraformDir = project.projectDir.path + '/terraform'
 
