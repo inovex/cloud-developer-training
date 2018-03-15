@@ -185,7 +185,7 @@ resource "aws_autoscaling_group" "whiskystore-products" {
 // --- DATABASE ---
 
 resource "aws_security_group" "postgresql" {
-  name = "postgresql-products"
+  name = "${var.prefix}-postgresql-products"
 
   ingress {
     from_port   = 5432
