@@ -199,7 +199,7 @@ resource "aws_db_instance" "postgresql" {
   allocated_storage       = "5"
   engine                  = "postgres"
   engine_version          = "9.6.5"
-  identifier              = "products-db"
+  identifier              = "${var.prefix}-products-db"
   instance_class          = "db.t2.micro"
   storage_type            = "gp2"
   name                    = "products"
@@ -213,4 +213,3 @@ resource "aws_db_instance" "postgresql" {
   backup_retention_period = 0
   vpc_security_group_ids  = [ "${aws_security_group.postgresql.id}" ]
 }
-
