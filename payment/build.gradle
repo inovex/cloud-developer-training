@@ -2,7 +2,7 @@ import jp.classmethod.aws.gradle.s3.AmazonS3FileUploadTask
 
 buildscript {
 	ext {
-		springBootVersion = "1.5.8.RELEASE"
+		springBootVersion = "2.1.4.RELEASE"
 	}
 	repositories {
 		mavenCentral()
@@ -29,12 +29,12 @@ repositories {
 
 dependencies {
 	compile(
-            "org.springframework.boot:spring-boot-starter-web",
-			"org.springframework.boot:spring-boot-starter-actuator"
+            "org.springframework.boot:spring-boot-starter-web:${springBootVersion}",
+			"org.springframework.boot:spring-boot-starter-actuator:${springBootVersion}"
 	)
 
 	testCompile(
-            "org.springframework.boot:spring-boot-starter-test"
+            "org.springframework.boot:spring-boot-starter-test:${springBootVersion}"
     )
 }
 

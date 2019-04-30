@@ -3,7 +3,7 @@ import jp.classmethod.aws.gradle.s3.SyncTask;
 
 buildscript {
 	ext {
-		springBootVersion = "1.5.8.RELEASE"
+		springBootVersion = "2.1.4.RELEASE"
 	}
 	repositories {
 		mavenCentral()
@@ -29,17 +29,17 @@ repositories {
 
 dependencies {
 	compile(
-            "org.springframework.boot:spring-boot-starter-data-jpa",
-            "org.springframework.boot:spring-boot-starter-web",
-			"org.springframework.boot:spring-boot-starter-actuator",
-            "com.h2database:h2",
-            "org.postgresql:postgresql",
-			"org.flywaydb:flyway-core",
+            "org.springframework.boot:spring-boot-starter-data-jpa:${springBootVersion}",
+            "org.springframework.boot:spring-boot-starter-web:${springBootVersion}",
+			"org.springframework.boot:spring-boot-starter-actuator:${springBootVersion}",
+            "com.h2database:h2:1.4.197",
+            "org.postgresql:postgresql:42.2.5",
+			"org.flywaydb:flyway-core:5.2.2",
 			"com.amazonaws:aws-java-sdk-s3:1.11.282"
     )
 
 	testCompile(
-            "org.springframework.boot:spring-boot-starter-test"
+            "org.springframework.boot:spring-boot-starter-test:${springBootVersion}"
     )
 }
 

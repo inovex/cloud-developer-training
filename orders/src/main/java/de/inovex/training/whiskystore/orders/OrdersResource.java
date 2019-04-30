@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 public class OrdersResource {
@@ -47,12 +48,10 @@ public class OrdersResource {
 
     @GetMapping(path = "/orders/{orderId}")
     public ResponseEntity<Order> getOrder(@PathVariable Long orderId) {
-        Order order = orderRepository.findOne(orderId);
-        if (order != null) {
-            return ResponseEntity.ok(order);
-        } else {
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-        }
+        Optional<Order> order = orderRepository.findById(orderId);
+        return order
+                .map(ResponseEntity::ok)
+                .orElse(new ResponseEntity<>(HttpStatus.NOT_FOUND));
     }
 
     private void addPrices(Order order) {

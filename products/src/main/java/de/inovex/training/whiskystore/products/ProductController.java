@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 public class ProductController {
@@ -37,26 +38,22 @@ public class ProductController {
                     method = RequestMethod.GET,
                     produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Product> findProduct(@PathVariable("id") long id) {
-        Product product = repository.findOne(id);
+        Optional<Product> product = repository.findById(id);
 
-        if (product == null) {
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-        }
-
-        return ResponseEntity.ok(product);
+        return product
+                .map(ResponseEntity::ok)
+                .orElse(new ResponseEntity<>(HttpStatus.NOT_FOUND));
     }
 
     @RequestMapping(path = "/products/{id}/images",
                     method = RequestMethod.GET,
                     produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<List<ProductImage>> findImagesOfProduct(@PathVariable("id") long id) {
-        Product product = repository.findOne(id);
+        Optional<Product> product = repository.findById(id);
 
-        if (product == null) {
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-        }
-
-        return ResponseEntity.ok(imageLoader.loadImagesForProduct(id));
+        return product
+                .map(p -> ResponseEntity.ok(imageLoader.loadImagesForProduct(p.getId())))
+                .orElse(new ResponseEntity<>(HttpStatus.NOT_FOUND));
     }
 
 }
