@@ -1,12 +1,12 @@
 # Terraform deployment
 
-* Projekt bauen und in S3 Bucket hochladen:
+## Voraussetzung
 
-  ```sh
-  export TF_VAR_prefix <your-user-name>
-  ./gradlew clean uploadToS3
-  ```
-* Terraform initialisieren und ausführen
+Vor dem Deployment muss die AWS Umgebung vorbereitet werden. Das Setup hierfür liegt in `core-infra/ecs`.
+
+## Terraform initialisieren und ausführen
+
+Diese Funktionalität steht auch über den Gradle Task `buildAndDeploy` zur Verfügung.
      
   ```sh
   cd terraform
