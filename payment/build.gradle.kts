@@ -1,4 +1,3 @@
-import jp.classmethod.aws.gradle.s3.AmazonS3FileUploadTask
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
@@ -8,7 +7,7 @@ plugins {
 	id("org.jetbrains.kotlin.plugin.spring") version kotlinVersion
 	id("io.spring.dependency-management") version "1.0.7.RELEASE"
 	id("org.jetbrains.gradle.plugin.idea-ext") version "0.5"
-	id("jp.classmethod.aws.s3") version "0.39"
+	id("com.google.cloud.tools.jib") version "1.1.2"
 }
 
 repositories {
@@ -38,19 +37,25 @@ dependencies {
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 
-aws {
-	profileName = "javaland"
-	region = "eu-central-1"
+jib {
+	to {
+		image = "853161928370.dkr.ecr.eu-central-1.amazonaws.com/${project.property("userPrefix")}-payment"
+		tags = setOf("${project.version}")
+	}
 }
 
-tasks.create<AmazonS3FileUploadTask>("uploadToS3") {
-	dependsOn("build")
-	//overwrite = true
-	file = tasks.getByName<Jar>("jar").archiveFile.get().asFile
-	bucketName = "javaland-whiskystore-terraform"
-	key = "${project.rootProject.properties["userPrefix"]}/jars/payment/${tasks.getByName<Jar>("jar").archiveFileName}"
+val awsECRLogin = task<Exec>("awsECRLogin") {
+	standardInput = System.`in`
+	executable = "sh"
+	setArgs(listOf("-c", "aws ecr get-login --region eu-central-1 --no-include-email | sh -"))
+}
+
+tasks {
+	"jib" {
+		dependsOn(awsECRLogin)
+	}
 }
 
 tasks.create<GradleBuild>("buildAndDeploy") {
-	tasks = listOf("clean", "uploadToS3", "deploy")
+	tasks = listOf("clean", "build", "jib", "deploy")
 }

@@ -1,76 +1,30 @@
-terraform {
-  backend "s3" {
-    region = "eu-central-1"
-    bucket = "javaland-whiskystore-terraform"
-    key = "payment.json"
-    profile = "javaland"
-    workspace_key_prefix = "javaland"
-  }
+
+
+resource "aws_cloudwatch_log_group" "service" {
+  name              = "/ecs/${var.prefix}/${local.name}"
+  retention_in_days = "1"
 }
 
-provider "aws" {
-  region = "eu-central-1"
-  profile = "javaland"
-  version = "~> 1.9"
-}
+resource "aws_security_group" "global-alb-access" {
+  name   = "${local.name_with_prefix}-global-alb-access"
+  vpc_id = "${data.aws_vpc.default.id}"
 
-provider "template" {
-  version = "~> 1.0"
-}
-
-resource "aws_key_pair" "ssh" {
-  key_name   = "${var.prefix}-javaland-payment"
-  public_key = "${file("ssh/javaland.pub")}"
-}
-
-// --- EC2 ---
-
-data "aws_ami" "ubuntu" {
-  most_recent = true
-
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-*"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-
-  owners = ["099720109477"] # Canonical
-}
-
-data "template_file" "provision_script" {
-  template = "${file("provision_instance.sh")}"
-
-  vars {
-    bucket = "s3://javaland-whiskystore-terraform"
-    prefix = "${var.prefix}/jars/payment"
-    jar = "payment-0.0.1-SNAPSHOT.jar" // This would usually be passed as a variable
-  }
-}
-
-resource "aws_security_group" "whiskystore-payment" {
-  name = "${var.prefix}-whiskystore-payment"
-
-  # SSH access from anywhere
   ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    protocol        = "tcp"
+    from_port       = "80"
+    to_port         = "80"
+    security_groups = ["${data.aws_security_group.global-alb.id}"]
+    description     = "global-alb-ingress"
   }
 
-  # HTTP access from anywhere
   ingress {
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    protocol        = "tcp"
+    from_port       = "8080"
+    to_port         = "8080"
+    security_groups = ["${data.aws_security_group.global-alb.id}"]
+    description     = "global-alb-ingress"
   }
 
-  # outbound internet access
   egress {
     from_port   = 0
     to_port     = 0
@@ -79,93 +33,103 @@ resource "aws_security_group" "whiskystore-payment" {
   }
 }
 
-resource "aws_launch_configuration" "whiskystore-payment" {
-  name_prefix = "${var.prefix}-whiskystore-payment Launch Configuration"
-  image_id = "${data.aws_ami.ubuntu.id}"
-  instance_type = "t2.micro"
-  security_groups = ["${aws_security_group.whiskystore-payment.id}"]
-  key_name = "${aws_key_pair.ssh.id}"
-  iam_instance_profile = "EC2Service"
-  enable_monitoring = false
-
-  user_data = "${data.template_file.provision_script.rendered}"
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-// --- ELB (Load Balancing) ---
-
-resource "aws_security_group" "whiskystore-payment-elb" {
-  name = "${var.prefix}-whiskystore-payment-elb"
-
-  # HTTP access from anywhere
-  ingress {
-    from_port = 80
-    to_port = 80
-    protocol = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # outbound internet access
-  egress {
-    from_port = 0
-    to_port = 0
-    protocol = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-resource "aws_elb" "whiskystore-payment-elb" {
-  name = "${var.prefix}-payment-elb"
-  cross_zone_load_balancing = true
-
-  security_groups = ["${aws_security_group.whiskystore-payment-elb.id}"]
-  availability_zones = ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
-
-  listener {
-    instance_port = 8080
-    instance_protocol = "http"
-    lb_port = 80
-    lb_protocol = "http"
-  }
+resource "aws_lb_target_group" "service" {
+  name                 = "${local.name_with_prefix}"
+  port                 = "8080"
+  protocol             = "HTTP"
+  vpc_id               = "${data.aws_vpc.default.id}"
+  target_type          = "ip"
+  deregistration_delay = "30"
 
   health_check {
-    healthy_threshold = 3
+    path                = "/actuator/health"
+    matcher             = "200"
+    interval            = 10
+    healthy_threshold   = 3
     unhealthy_threshold = 3
-    timeout = 2
-    target = "HTTP:8080/health"
-    interval = 10
-  }
-
-  tags {
-    Name = "${var.prefix}-whiskystore-payment"
+    timeout             = 2
   }
 }
 
-// --- Auto-scaling ---
+resource "aws_lb_listener_rule" "https" {
+  listener_arn = "${data.aws_lb_listener.default.arn}"
 
-resource "aws_autoscaling_group" "whiskystore-payment" {
-  name = "${var.prefix}-whiskystore-payment"
-  availability_zones = ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
-
-  launch_configuration = "${aws_launch_configuration.whiskystore-payment.id}"
-  load_balancers = ["${aws_elb.whiskystore-payment-elb.name}"]
-  termination_policies = ["OldestInstance"]
-
-  min_size = "1"
-  max_size = "2"
-  desired_capacity = "1"
-
-  tag {
-    key = "Name"
-    value = "${var.prefix}-whiskystore-payment"
-    propagate_at_launch = true
+  action {
+    type             = "forward"
+    target_group_arn = "${aws_lb_target_group.service.arn}"
   }
 
-  lifecycle {
-    create_before_destroy = true
+  condition {
+    field  = "host-header"
+    values = ["${local.name_with_prefix}.${var.domain}"]
   }
 }
 
+resource "aws_ecs_service" "service" {
+  name            = "${local.name}"
+  cluster         = "${data.aws_ecs_cluster.main.id}"
+  task_definition = "${aws_ecs_task_definition.service.arn}"
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    security_groups  = ["${aws_security_group.global-alb-access.id}"]
+    subnets          = ["${data.aws_subnet_ids.public.ids}"]
+    assign_public_ip = true
+  }
+
+  load_balancer {
+    target_group_arn = "${aws_lb_target_group.service.id}"
+    container_name   = "${local.name}"
+    container_port   = "8080"
+  }
+}
+
+data "template_file" "container_definition" {
+  template = <<EOF
+[
+  {
+    "name": "${local.name}",
+    "image": "853161928370.dkr.ecr.eu-central-1.amazonaws.com/${local.name_with_prefix}:${var.version}",
+    "essential": true,
+    "portMappings": [
+      {
+        "containerPort": 8080,
+        "hostPort": 8080
+      }
+    ],
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "${aws_cloudwatch_log_group.service.name}",
+        "awslogs-region": "eu-central-1",
+        "awslogs-stream-prefix": "main"
+      }
+    }
+  }
+]
+EOF
+}
+
+// https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-cpu-memory-error.html
+resource "aws_ecs_task_definition" "service" {
+  family                   = "${local.name}"
+  container_definitions    = "${data.template_file.container_definition.rendered}"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = "512"
+  memory                   = "1024"
+  execution_role_arn       = "${data.aws_iam_role.ecs-execution.arn}"
+}
+
+resource "aws_route53_record" "service" {
+  name    = "${local.name_with_prefix}.${data.aws_route53_zone.default.name}"
+  type    = "A"
+  zone_id = "${data.aws_route53_zone.default.id}"
+
+  alias {
+    name                   = "${data.aws_lb.global-alb.dns_name}"
+    zone_id                = "${data.aws_lb.global-alb.zone_id}"
+    evaluate_target_health = true
+  }
+}

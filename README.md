@@ -12,10 +12,17 @@
   * Datei `$HOME/.aws/credentials` (Linux/OS X) bzw. `%USERPROFILE%\.aws\credentials` (Windows) anlegen:
   
     ```shell
-    [javaland]
+    [inovex-cdt]
     aws_access_key_id=<your-access-key-id>
     aws_secret_access_key=<your-secret-access-key>
     ```
+
+# Setup des ECS Cluster (alle Teilnehmer)
+
+```shell
+cd core-infra/ecs
+AWS_PROFILE=inovex-cdt make apply prefix=$USER
+```
 
 # Deployment aller Services
 
