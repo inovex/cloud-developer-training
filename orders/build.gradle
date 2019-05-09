@@ -17,7 +17,7 @@ apply plugin: "org.springframework.boot"
 apply plugin: "com.google.cloud.tools.jib"
 
 group = "de.inovex.training.whiskystore.orders"
-version = "0.0.1-SNAPSHOT"
+version = file("VERSION").text.trim()
 sourceCompatibility = 1.8
 
 repositories {
@@ -53,6 +53,11 @@ task awsECRLogin(type: Exec) {
 }
 
 tasks.getByPath("jib").dependsOn("awsECRLogin")
+
+task bumpVersion(type: Exec) {
+	executable = "sh"
+	args = ["-c", "date +%s > VERSION"]
+}
 
 task buildAndDeploy(type: GradleBuild) {
 	tasks = ['clean', 'build', 'jib', 'deploy']
