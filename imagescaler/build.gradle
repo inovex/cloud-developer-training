@@ -32,7 +32,5 @@ task buildZip(type: Zip) {
 build.dependsOn buildZip
 
 task buildAndDeploy(type: GradleBuild) {
-    dependsOn ":products:buildAndDeploy" // S3 bucket for images is created here
-
     tasks = ['clean', 'build', 'deploy']
 }
