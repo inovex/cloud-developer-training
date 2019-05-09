@@ -61,3 +61,7 @@ resource "aws_iam_role_policy_attachment" "ecs-ecr-access" {
 resource "aws_ecr_repository" "payment" {
   name = "${var.prefix}-payment"
 }
+
+resource "aws_ecr_repository" "orders" {
+  name = "${var.prefix}-orders"
+}

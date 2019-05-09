@@ -1,5 +1,3 @@
-import jp.classmethod.aws.gradle.s3.AmazonS3FileUploadTask
-
 buildscript {
 	ext {
 		springBootVersion = "2.1.4.RELEASE"
@@ -10,13 +8,13 @@ buildscript {
 	}
 	dependencies {
 		classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
-		classpath("jp.classmethod.aws:gradle-aws-plugin:0.30")
+		classpath "gradle.plugin.com.google.cloud.tools:jib-gradle-plugin:1.2.0"
 	}
 }
 
 apply plugin: "java"
 apply plugin: "org.springframework.boot"
-apply plugin: "jp.classmethod.aws.s3"
+apply plugin: "com.google.cloud.tools.jib"
 
 group = "de.inovex.training.whiskystore.orders"
 version = "0.0.1-SNAPSHOT"
@@ -25,7 +23,6 @@ sourceCompatibility = 1.8
 repositories {
 	mavenCentral()
 }
-
 
 dependencies {
 	compile(
@@ -42,21 +39,21 @@ dependencies {
 	)
 }
 
-aws {
-	profileName = "javaland"
-	region = "eu-central-1"
+jib {
+	to {
+		image = "853161928370.dkr.ecr.eu-central-1.amazonaws.com/${project.property("userPrefix")}-orders"
+		tags = [project.version]
+	}
 }
 
-task uploadToS3(type: AmazonS3FileUploadTask, dependsOn: build) {
-	overwrite true
-	file jar.archivePath
-	bucketName "javaland-whiskystore-terraform"
-	key "${userPrefix}/jars/orders/${jar.archiveName}"
+task awsECRLogin(type: Exec) {
+	standardInput = System.in
+	executable = "sh"
+	args = ["-c", "aws ecr get-login --region eu-central-1 --no-include-email | sh -"]
 }
+
+tasks.getByPath("jib").dependsOn("awsECRLogin")
 
 task buildAndDeploy(type: GradleBuild) {
-	dependsOn ":products:buildAndDeploy"
-	dependsOn ":payment:buildAndDeploy"
-
-	tasks = ['clean', 'uploadToS3', 'deploy']
+	tasks = ['clean', 'build', 'jib', 'deploy']
 }
