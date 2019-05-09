@@ -1,5 +1,3 @@
-import jp.classmethod.aws.gradle.s3.AmazonS3FileUploadTask
-import jp.classmethod.aws.gradle.s3.SyncTask;
 
 buildscript {
 	ext {
@@ -11,13 +9,13 @@ buildscript {
 	}
 	dependencies {
 		classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
-		classpath("jp.classmethod.aws:gradle-aws-plugin:0.30")
+		classpath("gradle.plugin.com.google.cloud.tools:jib-gradle-plugin:1.2.0")
 	}
 }
 
 apply plugin: "java"
 apply plugin: "org.springframework.boot"
-apply plugin: "jp.classmethod.aws.s3"
+apply plugin: "com.google.cloud.tools.jib"
 
 group = "de.inovex.training.whiskystore"
 version = "0.0.1-SNAPSHOT"
@@ -43,24 +41,28 @@ dependencies {
     )
 }
 
-aws {
-	profileName = "javaland"
-	region = "eu-central-1"
+
+task copyImagesToS3(type: Exec) {
+	standardInput = System.in
+	executable = "sh"
+	args = ["-c", "aws s3 cp --recursive src/main/resources/images s3://${userPrefix}-whiskystore-images/inbox/"]
 }
 
-task uploadToS3(type: AmazonS3FileUploadTask, dependsOn: build) {
-	overwrite true
-	file jar.archivePath
-	bucketName "javaland-whiskystore-terraform"
-	key "${userPrefix}/jars/products/${jar.archiveName}"
+jib {
+	to {
+		image = "853161928370.dkr.ecr.eu-central-1.amazonaws.com/${project.property("userPrefix")}-products"
+		tags = [project.version]
+	}
 }
 
-task copyImagesToS3(type: SyncTask) {
-	source file("src/main/resources/images") // must be directory
-	bucketName "${userPrefix}-whiskystore-images"
-	prefix "inbox/"
+task awsECRLogin(type: Exec) {
+	standardInput = System.in
+	executable = "sh"
+	args = ["-c", "aws ecr get-login --region eu-central-1 --no-include-email | sh -"]
 }
+
+tasks.getByPath("jib").dependsOn("awsECRLogin")
 
 task buildAndDeploy(type: GradleBuild) {
-	tasks = ['clean', 'uploadToS3', 'deploy']
+	tasks = ['clean', 'build', 'jib', 'deploy']
 }

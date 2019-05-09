@@ -2,12 +2,16 @@ output "images-s3-bucket" {
   value = "${aws_s3_bucket.images.bucket}"
 }
 
-output "elb-endpoint" {
-  value = "${aws_elb.whiskystore-products-elb.dns_name}"
+output "example-call" {
+  value = "curl https://${aws_route53_record.service.fqdn}/products"
 }
 
-output "example-call" {
-  value = "curl http://${aws_elb.whiskystore-products-elb.dns_name}/products"
+output "endpoint" {
+  value = "https://${aws_route53_record.service.fqdn}"
+}
+
+output "health-endpoint" {
+  value = "https://${aws_route53_record.service.fqdn}/actuator/health"
 }
 
 output "db" {
