@@ -65,3 +65,7 @@ resource "aws_ecr_repository" "payment" {
 resource "aws_ecr_repository" "orders" {
   name = "${var.prefix}-orders"
 }
+
+resource "aws_ecr_repository" "products" {
+  name = "${var.prefix}-products"
+}
