@@ -1,101 +1,30 @@
-terraform {
-  backend "s3" {
-    region = "eu-central-1"
-    bucket = "javaland-whiskystore-terraform"
-    key = "orders.json"
-    profile = "javaland"
-    workspace_key_prefix = "javaland"
-  }
+
+
+resource "aws_cloudwatch_log_group" "service" {
+  name              = "/ecs/${var.prefix}/${local.name}"
+  retention_in_days = "1"
 }
 
-provider "aws" {
-  region = "eu-central-1"
-  profile = "javaland"
-  version = "~> 1.9"
-}
+resource "aws_security_group" "global-alb-access" {
+  name   = "${local.name_with_prefix}-global-alb-access"
+  vpc_id = "${data.aws_vpc.default.id}"
 
-provider "template" {
-  version = "~> 1.0"
-}
-
-resource "aws_key_pair" "ssh" {
-  key_name   = "${var.prefix}-javaland-orders"
-  public_key = "${file("ssh/javaland.pub")}"
-}
-
-data "terraform_remote_state" "products" {
-  backend = "s3"
-  config {
-    region = "eu-central-1"
-    profile = "javaland"
-    bucket = "javaland-whiskystore-terraform"
-    key = "javaland/${var.prefix}/products.json"
-  }
-}
-
-data "terraform_remote_state" "payment" {
-  backend = "s3"
-  config {
-    region = "eu-central-1"
-    profile = "javaland"
-    bucket = "javaland-whiskystore-terraform"
-    key = "javaland/${var.prefix}/payment.json"
-  }
-}
-
-// --- EC2 ---
-
-data "aws_ami" "ubuntu" {
-  most_recent = true
-
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-*"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-
-  owners = ["099720109477"] # Canonical
-}
-
-data "template_file" "provision_script" {
-  template = "${file("provision_instance.sh")}"
-
-  vars {
-    bucket = "s3://javaland-whiskystore-terraform"
-    prefix = "${var.prefix}/jars/orders"
-    jar = "orders-0.0.1-SNAPSHOT.jar" // This would usually be passed as a variable
-    db_endpoint = "${aws_db_instance.postgresql.endpoint}"
-    db_user = "${aws_db_instance.postgresql.username}"
-    db_password = "${aws_db_instance.postgresql.password}"
-    products_endpoint = "${data.terraform_remote_state.products.elb-endpoint}"
-    payment_endpoint = "${data.terraform_remote_state.payment.elb-endpoint}"
-  }
-}
-
-resource "aws_security_group" "whiskystore-orders" {
-  name = "${var.prefix}-whiskystore-orders"
-
-  # SSH access from anywhere
   ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    protocol        = "tcp"
+    from_port       = "80"
+    to_port         = "80"
+    security_groups = ["${data.aws_security_group.global-alb.id}"]
+    description     = "global-alb-ingress"
   }
 
-  # HTTP access from anywhere
   ingress {
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    protocol        = "tcp"
+    from_port       = "8080"
+    to_port         = "8080"
+    security_groups = ["${data.aws_security_group.global-alb.id}"]
+    description     = "global-alb-ingress"
   }
 
-  # outbound internet access
   egress {
     from_port   = 0
     to_port     = 0
@@ -104,124 +33,111 @@ resource "aws_security_group" "whiskystore-orders" {
   }
 }
 
-resource "aws_launch_configuration" "whiskystore-orders" {
-  name_prefix = "${var.prefix}-whiskystore-orders Launch Configuration"
-  image_id = "${data.aws_ami.ubuntu.id}"
-  instance_type = "t2.micro"
-  security_groups = ["${aws_security_group.whiskystore-orders.id}"]
-  key_name = "${aws_key_pair.ssh.id}"
-  iam_instance_profile = "EC2Service"
-  enable_monitoring = false
-
-  user_data = "${data.template_file.provision_script.rendered}"
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-// --- ELB (Load Balancing) ---
-
-resource "aws_security_group" "whiskystore-orders-elb" {
-  name = "${var.prefix}-whiskystore-orders-elb"
-
-  # HTTP access from anywhere
-  ingress {
-    from_port = 80
-    to_port = 80
-    protocol = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # outbound internet access
-  egress {
-    from_port = 0
-    to_port = 0
-    protocol = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-resource "aws_elb" "whiskystore-orders-elb" {
-  name = "${var.prefix}-orders-elb"
-  cross_zone_load_balancing = true
-
-  security_groups = ["${aws_security_group.whiskystore-orders-elb.id}"]
-  availability_zones = ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
-
-  listener {
-    instance_port = 8080
-    instance_protocol = "http"
-    lb_port = 80
-    lb_protocol = "http"
-  }
+resource "aws_lb_target_group" "service" {
+  name                 = "${local.name_with_prefix}"
+  port                 = "8080"
+  protocol             = "HTTP"
+  vpc_id               = "${data.aws_vpc.default.id}"
+  target_type          = "ip"
+  deregistration_delay = "30"
 
   health_check {
-    healthy_threshold = 3
+    path                = "/actuator/health"
+    matcher             = "200"
+    interval            = 30
+    healthy_threshold   = 3
     unhealthy_threshold = 3
-    timeout = 2
-    target = "HTTP:8080/health"
-    interval = 10
-  }
-
-  tags {
-    Name = "${var.prefix}-whiskystore-orders"
+    timeout             = 2
   }
 }
 
-// --- Auto-scaling ---
+resource "aws_lb_listener_rule" "https" {
+  listener_arn = "${data.aws_lb_listener.default.arn}"
 
-resource "aws_autoscaling_group" "whiskystore-orders" {
-  name = "${var.prefix}-whiskystore-orders"
-  availability_zones = ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
-
-  launch_configuration = "${aws_launch_configuration.whiskystore-orders.id}"
-  load_balancers = ["${aws_elb.whiskystore-orders-elb.name}"]
-  termination_policies = ["OldestInstance"]
-
-  min_size = "1"
-  max_size = "2"
-  desired_capacity = "1"
-
-  tag {
-    key = "Name"
-    value = "${var.prefix}-whiskystore-orders"
-    propagate_at_launch = true
+  action {
+    type             = "forward"
+    target_group_arn = "${aws_lb_target_group.service.arn}"
   }
 
-  lifecycle {
-    create_before_destroy = true
+  condition {
+    field  = "host-header"
+    values = ["${local.name_with_prefix}.${var.domain}"]
   }
 }
 
-// --- DATABASE ---
+resource "aws_ecs_service" "service" {
+  name            = "${local.name}"
+  cluster         = "${data.aws_ecs_cluster.main.id}"
+  task_definition = "${aws_ecs_task_definition.service.arn}"
+  desired_count   = 1
+  launch_type     = "FARGATE"
 
-resource "aws_security_group" "postgresql" {
-  name = "${var.prefix}-postgresql-orders"
+  network_configuration {
+    security_groups  = ["${aws_security_group.global-alb-access.id}"]
+    subnets          = ["${data.aws_subnet_ids.public.ids}"]
+    assign_public_ip = true
+  }
 
-  ingress {
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = [ "0.0.0.0/0" ] # NOT RECOMMENDED FOR PRODUCTION!
+  load_balancer {
+    target_group_arn = "${aws_lb_target_group.service.id}"
+    container_name   = "${local.name}"
+    container_port   = "8080"
   }
 }
 
-resource "aws_db_instance" "postgresql" {
-  allocated_storage       = "5"
-  engine                  = "postgres"
-  engine_version          = "9.6.5"
-  identifier              = "${var.prefix}-orders-db"
-  instance_class          = "db.t2.micro"
-  storage_type            = "gp2"
-  name                    = "orders"
-  username                = "${lookup(var.postgresql, "user")}"
-  password                = "${lookup(var.postgresql, "password")}"
-  backup_window           = "03:00-03:30"
-  maintenance_window      = "Mon:04:00-Mon:04:30"
-  multi_az                = false
-  port                    = "5432"
-  skip_final_snapshot     = true
-  backup_retention_period = 0
-  vpc_security_group_ids  = [ "${aws_security_group.postgresql.id}" ]
+data "template_file" "container_definition" {
+  template = <<EOF
+[
+  {
+    "name": "${local.name}",
+    "image": "853161928370.dkr.ecr.eu-central-1.amazonaws.com/${local.name_with_prefix}:${var.version}",
+    "essential": true,
+    "portMappings": [
+      {
+        "containerPort": 8080,
+        "hostPort": 8080
+      }
+    ],
+    "environment": [
+      {"name":"SPRING_DATASOURCE_DRIVERCLASSNAME", "value": "org.postgresql.Driver"},
+      {"name":"SPRING_DATASOURCE_URL", "value": "jdbc:postgresql://${aws_db_instance.postgresql.endpoint}/orders?autoReconnect=true"},
+      {"name":"SPRING_DATASOURCE_USERNAME", "value": "${lookup(var.postgresql, "user")}"},
+      {"name":"SPRING_DATASOURCE_PASSWORD", "value": "${lookup(var.postgresql, "password")}"},
+      {"name":"PRODUCTS_ENDPOINT", "value": "https://${local.products_endpoint}"},
+      {"name":"PAYMENT_ENDPOINT", "value": "https://${local.payment_endpoint}"}
+    ],
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "${aws_cloudwatch_log_group.service.name}",
+        "awslogs-region": "eu-central-1",
+        "awslogs-stream-prefix": "main"
+      }
+    }
+  }
+]
+EOF
+}
+
+// https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-cpu-memory-error.html
+resource "aws_ecs_task_definition" "service" {
+  family                   = "${local.name}"
+  container_definitions    = "${data.template_file.container_definition.rendered}"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = "512"
+  memory                   = "1024"
+  execution_role_arn       = "${data.aws_iam_role.ecs-execution.arn}"
+}
+
+resource "aws_route53_record" "service" {
+  name    = "${local.name_with_prefix}.${data.aws_route53_zone.default.name}"
+  type    = "A"
+  zone_id = "${data.aws_route53_zone.default.id}"
+
+  alias {
+    name                   = "${data.aws_lb.global-alb.dns_name}"
+    zone_id                = "${data.aws_lb.global-alb.zone_id}"
+    evaluate_target_health = true
+  }
 }
