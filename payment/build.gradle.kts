@@ -16,7 +16,7 @@ repositories {
 }
 
 group = "de.inovex.training.whiskystore.payment"
-version = "0.0.1-SNAPSHOT"
+version = file("VERSION").readText().trim()
 
 tasks.withType<KotlinCompile> {
 	kotlinOptions {
@@ -54,6 +54,11 @@ tasks {
 	"jib" {
 		dependsOn(awsECRLogin)
 	}
+}
+
+task<Exec>("bumpVersion") {
+	executable = "sh"
+	setArgs(listOf("-c", "date +%s > VERSION"))
 }
 
 tasks.create<GradleBuild>("buildAndDeploy") {

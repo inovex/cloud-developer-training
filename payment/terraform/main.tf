@@ -90,13 +90,16 @@ data "template_file" "container_definition" {
 [
   {
     "name": "${local.name}",
-    "image": "853161928370.dkr.ecr.eu-central-1.amazonaws.com/${local.name_with_prefix}:${var.version}",
+    "image": "853161928370.dkr.ecr.eu-central-1.amazonaws.com/${local.name_with_prefix}:${local.service_version}",
     "essential": true,
     "portMappings": [
       {
         "containerPort": 8080,
         "hostPort": 8080
       }
+    ],
+    "environment": [
+      {"name":"INFO_APP_VERSION", "value": "${local.service_version}"}
     ],
     "logConfiguration": {
       "logDriver": "awslogs",
