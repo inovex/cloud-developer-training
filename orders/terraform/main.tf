@@ -90,7 +90,7 @@ data "template_file" "container_definition" {
 [
   {
     "name": "${local.name}",
-    "image": "853161928370.dkr.ecr.eu-central-1.amazonaws.com/${local.name_with_prefix}:${var.version}",
+    "image": "853161928370.dkr.ecr.eu-central-1.amazonaws.com/${local.name_with_prefix}:${local.service_version}",
     "essential": true,
     "portMappings": [
       {
@@ -99,6 +99,7 @@ data "template_file" "container_definition" {
       }
     ],
     "environment": [
+      {"name":"INFO_APP_VERSION", "value": "${local.service_version}"},
       {"name":"SPRING_DATASOURCE_DRIVERCLASSNAME", "value": "org.postgresql.Driver"},
       {"name":"SPRING_DATASOURCE_URL", "value": "jdbc:postgresql://${aws_db_instance.postgresql.endpoint}/orders?autoReconnect=true"},
       {"name":"SPRING_DATASOURCE_USERNAME", "value": "${lookup(var.postgresql, "user")}"},
