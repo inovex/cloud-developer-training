@@ -9,7 +9,6 @@ buildscript {
 	}
 	dependencies {
 		classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
-		classpath("gradle.plugin.com.google.cloud.tools:jib-gradle-plugin:1.2.0")
 	}
 }
 
@@ -38,13 +37,6 @@ dependencies {
 	testCompile(
             "org.springframework.boot:spring-boot-starter-test:${springBootVersion}"
     )
-}
-
-
-task copyImagesToS3(type: Exec) {
-	standardInput = System.in
-	executable = "sh"
-	args = ["-c", "aws s3 cp --recursive src/main/resources/images s3://${userPrefix}-whiskystore-images/inbox/"]
 }
 
 task bumpVersion(type: Exec) {
