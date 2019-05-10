@@ -15,7 +15,6 @@ buildscript {
 
 apply plugin: "java"
 apply plugin: "org.springframework.boot"
-apply plugin: "com.google.cloud.tools.jib"
 
 group = "de.inovex.training.whiskystore"
 version = file("VERSION").text.trim()
@@ -48,26 +47,7 @@ task copyImagesToS3(type: Exec) {
 	args = ["-c", "aws s3 cp --recursive src/main/resources/images s3://${userPrefix}-whiskystore-images/inbox/"]
 }
 
-jib {
-	to {
-		image = "853161928370.dkr.ecr.eu-central-1.amazonaws.com/${project.property("userPrefix")}-products"
-		tags = [project.version]
-	}
-}
-
-task awsECRLogin(type: Exec) {
-	standardInput = System.in
-	executable = "sh"
-	args = ["-c", "aws ecr get-login --region eu-central-1 --no-include-email | sh -"]
-}
-
 task bumpVersion(type: Exec) {
 	executable = "sh"
 	args = ["-c", "date +%s > VERSION"]
-}
-
-tasks.getByPath("jib").dependsOn("awsECRLogin")
-
-task buildAndDeploy(type: GradleBuild) {
-	tasks = ['clean', 'build', 'jib', 'deploy']
 }
