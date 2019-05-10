@@ -14,7 +14,6 @@ buildscript {
 
 apply plugin: "java"
 apply plugin: "org.springframework.boot"
-apply plugin: "com.google.cloud.tools.jib"
 
 group = "de.inovex.training.whiskystore.orders"
 version = file("VERSION").text.trim()
@@ -39,26 +38,8 @@ dependencies {
 	)
 }
 
-jib {
-	to {
-		image = "853161928370.dkr.ecr.eu-central-1.amazonaws.com/${project.property("userPrefix")}-orders"
-		tags = [project.version]
-	}
-}
-
-task awsECRLogin(type: Exec) {
-	standardInput = System.in
-	executable = "sh"
-	args = ["-c", "aws ecr get-login --region eu-central-1 --no-include-email | sh -"]
-}
-
-tasks.getByPath("jib").dependsOn("awsECRLogin")
-
 task bumpVersion(type: Exec) {
 	executable = "sh"
 	args = ["-c", "date +%s > VERSION"]
 }
 
-task buildAndDeploy(type: GradleBuild) {
-	tasks = ['clean', 'build', 'jib', 'deploy']
-}

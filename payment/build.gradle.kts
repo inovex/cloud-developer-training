@@ -7,7 +7,6 @@ plugins {
 	id("org.jetbrains.kotlin.plugin.spring") version kotlinVersion
 	id("io.spring.dependency-management") version "1.0.7.RELEASE"
 	id("org.jetbrains.gradle.plugin.idea-ext") version "0.5"
-	id("com.google.cloud.tools.jib") version "1.1.2"
 }
 
 repositories {
@@ -37,30 +36,7 @@ dependencies {
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 
-jib {
-	to {
-		image = "853161928370.dkr.ecr.eu-central-1.amazonaws.com/${project.property("userPrefix")}-payment"
-		tags = setOf("${project.version}")
-	}
-}
-
-val awsECRLogin = task<Exec>("awsECRLogin") {
-	standardInput = System.`in`
-	executable = "sh"
-	setArgs(listOf("-c", "aws ecr get-login --region eu-central-1 --no-include-email | sh -"))
-}
-
-tasks {
-	"jib" {
-		dependsOn(awsECRLogin)
-	}
-}
-
 task<Exec>("bumpVersion") {
 	executable = "sh"
 	setArgs(listOf("-c", "date +%s > VERSION"))
-}
-
-tasks.create<GradleBuild>("buildAndDeploy") {
-	tasks = listOf("clean", "build", "jib", "deploy")
 }
